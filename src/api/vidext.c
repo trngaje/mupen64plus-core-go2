@@ -35,6 +35,9 @@
 #include "m64p_vidext.h"
 #include "vidext.h"
 
+#include <go2/display.h>
+#include <drm/drm_fourcc.h>
+
 #if SDL_VERSION_ATLEAST(2,0,0)
     #ifndef USE_GLES
     static int l_ForceCompatibilityContext = 1;
@@ -48,6 +51,10 @@ static int l_VideoExtensionActive = 0;
 static int l_VideoOutputActive = 0;
 static int l_Fullscreen = 0;
 static SDL_Surface *l_pScreen = NULL;
+static go2_display_t* display = NULL;
+static go2_presenter_t* presenter = NULL;
+static go2_context_t* context = NULL;
+
 
 /* global function for use by frontend.c */
 m64p_error OverrideVideoFunctions(m64p_video_extension_functions *VideoFunctionStruct)
@@ -105,11 +112,29 @@ EXPORT m64p_error CALL VidExt_Init(void)
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
 #endif
 
-    if (SDL_InitSubSystem(SDL_INIT_VIDEO) == -1)
+    if (SDL_InitSubSystem(SDL_INIT_EVENTS) == -1)
     {
         DebugMessage(M64MSG_ERROR, "SDL video subsystem init failed: %s", SDL_GetError());
         return M64ERR_SYSTEM_FAIL;
     }
+
+    //kms_window = kms_window_create();
+    display = go2_display_create();
+    presenter = go2_presenter_create(display, DRM_FORMAT_RGB565, 0xff080808);
+
+    go2_context_attributes_t attr;
+    attr.major = 2;
+    attr.minor = 0;
+    attr.red_bits = 8;
+    attr.green_bits = 8;
+    attr.blue_bits = 8;
+    attr.alpha_bits = 8;
+    attr.depth_bits = 24;
+    attr.stencil_bits = 8;
+
+    //context = go2_context_create(display, 480, 320, &attr);
+    context = go2_context_create(display, 320, 240, &attr);
+    go2_context_make_current(context);
 
     return M64ERR_SUCCESS;
 }
@@ -128,14 +153,28 @@ EXPORT m64p_error CALL VidExt_Quit(void)
         return rval;
     }
 
-    if (!SDL_WasInit(SDL_INIT_VIDEO))
-        return M64ERR_NOT_INIT;
+//     if (!SDL_WasInit(SDL_INIT_VIDEO))
+//         return M64ERR_NOT_INIT;
 
-    SDL_ShowCursor(SDL_ENABLE);
-#if SDL_VERSION_ATLEAST(2,0,0)
-    SDL2_DestroyWindow();
-#endif
-    SDL_QuitSubSystem(SDL_INIT_VIDEO);
+//     SDL_ShowCursor(SDL_ENABLE);
+// #if SDL_VERSION_ATLEAST(2,0,0)
+//     SDL2_DestroyWindow();
+// #endif
+//     SDL_QuitSubSystem(SDL_INIT_VIDEO);
+
+    //kms_window_destory(kms_window);
+
+    go2_context_destroy(context);
+    context = NULL;
+
+    go2_presenter_destroy(presenter);
+    presenter = NULL;
+
+    go2_display_destroy(display);
+    display = NULL;
+
+    //kms_window = NULL;
+
     l_pScreen = NULL;
     l_VideoOutputActive = 0;
     StateChanged(M64CORE_VIDEO_MODE, M64VIDEO_NONE);
@@ -154,41 +193,50 @@ EXPORT m64p_error CALL VidExt_ListFullscreenModes(m64p_2d_size *SizeArray, int *
     if (l_VideoExtensionActive)
         return (*l_ExternalVideoFuncTable.VidExtFuncListModes)(SizeArray, NumSizes);
 
-    if (!SDL_WasInit(SDL_INIT_VIDEO))
+    // if (!SDL_WasInit(SDL_INIT_VIDEO))
+    //     return M64ERR_NOT_INIT;
+
+    // /* get a list of SDL video modes */
+    // videoFlags = SDL_OPENGL | SDL_FULLSCREEN;
+
+    // if ((videoInfo = SDL_GetVideoInfo()) == NULL)
+    // {
+    //     DebugMessage(M64MSG_ERROR, "SDL_GetVideoInfo query failed: %s", SDL_GetError());
+    //     return M64ERR_SYSTEM_FAIL;
+    // }
+
+    // if(videoInfo->hw_available)
+    //     videoFlags |= SDL_HWSURFACE;
+    // else
+    //     videoFlags |= SDL_SWSURFACE;
+
+    // modes = SDL_ListModes(NULL, videoFlags);
+
+    // if (modes == (SDL_Rect **) 0 || modes == (SDL_Rect **) -1)
+    // {
+    //     DebugMessage(M64MSG_WARNING, "No fullscreen SDL video modes available");
+    //     *NumSizes = 0;
+    //     return M64ERR_SUCCESS;
+    // }
+
+    // i = 0;
+    // while (i < *NumSizes && modes[i] != NULL)
+    // {
+    //     SizeArray[i].uiWidth  = modes[i]->w;
+    //     SizeArray[i].uiHeight = modes[i]->h;
+    //     i++;
+    // }
+
+    // *NumSizes = i;
+
+    //if (!kms_window)
+    if (!display)
         return M64ERR_NOT_INIT;
 
-    /* get a list of SDL video modes */
-    videoFlags = SDL_OPENGL | SDL_FULLSCREEN;
+    SizeArray[0].uiWidth = 480; //kms_window->width;
+    SizeArray[0].uiHeight = 320; //kms_window->height;
 
-    if ((videoInfo = SDL_GetVideoInfo()) == NULL)
-    {
-        DebugMessage(M64MSG_ERROR, "SDL_GetVideoInfo query failed: %s", SDL_GetError());
-        return M64ERR_SYSTEM_FAIL;
-    }
-
-    if(videoInfo->hw_available)
-        videoFlags |= SDL_HWSURFACE;
-    else
-        videoFlags |= SDL_SWSURFACE;
-
-    modes = SDL_ListModes(NULL, videoFlags);
-
-    if (modes == (SDL_Rect **) 0 || modes == (SDL_Rect **) -1)
-    {
-        DebugMessage(M64MSG_WARNING, "No fullscreen SDL video modes available");
-        *NumSizes = 0;
-        return M64ERR_SUCCESS;
-    }
-
-    i = 0;
-    while (i < *NumSizes && modes[i] != NULL)
-    {
-        SizeArray[i].uiWidth  = modes[i]->w;
-        SizeArray[i].uiHeight = modes[i]->h;
-        i++;
-    }
-
-    *NumSizes = i;
+    *NumSizes = 1;
 
     return M64ERR_SUCCESS;
 }
@@ -212,49 +260,53 @@ EXPORT m64p_error CALL VidExt_SetVideoMode(int Width, int Height, int BitsPerPix
         return rval;
     }
 
-    if (!SDL_WasInit(SDL_INIT_VIDEO))
+    // if (!SDL_WasInit(SDL_INIT_VIDEO))
+    //     return M64ERR_NOT_INIT;
+
+    // /* Get SDL video flags to use */
+    // if (ScreenMode == M64VIDEO_WINDOWED)
+    // {
+    //     videoFlags = SDL_OPENGL;
+    //     if (Flags & M64VIDEOFLAG_SUPPORT_RESIZING)
+    //         videoFlags |= SDL_RESIZABLE;
+    // }
+    // else if (ScreenMode == M64VIDEO_FULLSCREEN)
+    // {
+    //     videoFlags = SDL_OPENGL | SDL_FULLSCREEN;
+    // }
+    // else
+    // {
+    //     return M64ERR_INPUT_INVALID;
+    // }
+
+    // if ((videoInfo = SDL_GetVideoInfo()) == NULL)
+    // {
+    //     DebugMessage(M64MSG_ERROR, "SDL_GetVideoInfo query failed: %s", SDL_GetError());
+    //     return M64ERR_SYSTEM_FAIL;
+    // }
+    // if (videoInfo->hw_available)
+    //     videoFlags |= SDL_HWSURFACE;
+    // else
+    //     videoFlags |= SDL_SWSURFACE;
+
+    // /* set the mode */
+    // if (BitsPerPixel > 0)
+    //     DebugMessage(M64MSG_INFO, "Setting %i-bit video mode: %ix%i", BitsPerPixel, Width, Height);
+    // else
+    //     DebugMessage(M64MSG_INFO, "Setting video mode: %ix%i", Width, Height);
+
+    // l_pScreen = SDL_SetVideoMode(Width, Height, BitsPerPixel, videoFlags);
+    // if (l_pScreen == NULL)
+    // {
+    //     DebugMessage(M64MSG_ERROR, "SDL_SetVideoMode failed: %s", SDL_GetError());
+    //     return M64ERR_SYSTEM_FAIL;
+    // }
+
+    // SDL_ShowCursor(SDL_DISABLE);
+
+    //if (!kms_window)
+    if (!display)
         return M64ERR_NOT_INIT;
-
-    /* Get SDL video flags to use */
-    if (ScreenMode == M64VIDEO_WINDOWED)
-    {
-        videoFlags = SDL_OPENGL;
-        if (Flags & M64VIDEOFLAG_SUPPORT_RESIZING)
-            videoFlags |= SDL_RESIZABLE;
-    }
-    else if (ScreenMode == M64VIDEO_FULLSCREEN)
-    {
-        videoFlags = SDL_OPENGL | SDL_FULLSCREEN;
-    }
-    else
-    {
-        return M64ERR_INPUT_INVALID;
-    }
-
-    if ((videoInfo = SDL_GetVideoInfo()) == NULL)
-    {
-        DebugMessage(M64MSG_ERROR, "SDL_GetVideoInfo query failed: %s", SDL_GetError());
-        return M64ERR_SYSTEM_FAIL;
-    }
-    if (videoInfo->hw_available)
-        videoFlags |= SDL_HWSURFACE;
-    else
-        videoFlags |= SDL_SWSURFACE;
-
-    /* set the mode */
-    if (BitsPerPixel > 0)
-        DebugMessage(M64MSG_INFO, "Setting %i-bit video mode: %ix%i", BitsPerPixel, Width, Height);
-    else
-        DebugMessage(M64MSG_INFO, "Setting video mode: %ix%i", Width, Height);
-
-    l_pScreen = SDL_SetVideoMode(Width, Height, BitsPerPixel, videoFlags);
-    if (l_pScreen == NULL)
-    {
-        DebugMessage(M64MSG_ERROR, "SDL_SetVideoMode failed: %s", SDL_GetError());
-        return M64ERR_SYSTEM_FAIL;
-    }
-
-    SDL_ShowCursor(SDL_DISABLE);
 
     l_Fullscreen = (ScreenMode == M64VIDEO_FULLSCREEN);
     l_VideoOutputActive = 1;
@@ -285,8 +337,8 @@ EXPORT m64p_error CALL VidExt_ResizeWindow(int Width, int Height)
         return rval;
     }
 
-    if (!l_VideoOutputActive || !SDL_WasInit(SDL_INIT_VIDEO))
-        return M64ERR_NOT_INIT;
+    // if (!l_VideoOutputActive || !SDL_WasInit(SDL_INIT_VIDEO))
+    //     return M64ERR_NOT_INIT;
 
     if (l_Fullscreen)
     {
@@ -294,28 +346,28 @@ EXPORT m64p_error CALL VidExt_ResizeWindow(int Width, int Height)
         return M64ERR_INVALID_STATE;
     }
 
-    /* Get SDL video flags to use */
-    videoFlags = SDL_OPENGL | SDL_RESIZABLE;
-    if ((videoInfo = SDL_GetVideoInfo()) == NULL)
-    {
-        DebugMessage(M64MSG_ERROR, "SDL_GetVideoInfo query failed: %s", SDL_GetError());
-        return M64ERR_SYSTEM_FAIL;
-    }
-    if (videoInfo->hw_available)
-        videoFlags |= SDL_HWSURFACE;
-    else
-        videoFlags |= SDL_SWSURFACE;
+    // /* Get SDL video flags to use */
+    // videoFlags = SDL_OPENGL | SDL_RESIZABLE;
+    // if ((videoInfo = SDL_GetVideoInfo()) == NULL)
+    // {
+    //     DebugMessage(M64MSG_ERROR, "SDL_GetVideoInfo query failed: %s", SDL_GetError());
+    //     return M64ERR_SYSTEM_FAIL;
+    // }
+    // if (videoInfo->hw_available)
+    //     videoFlags |= SDL_HWSURFACE;
+    // else
+    //     videoFlags |= SDL_SWSURFACE;
 
     // destroy the On-Screen Display
     osd_exit();
 
-    /* set the re-sizing the screen will create a new OpenGL context */
-    l_pScreen = SDL_SetVideoMode(Width, Height, 0, videoFlags);
-    if (l_pScreen == NULL)
-    {
-        DebugMessage(M64MSG_ERROR, "SDL_SetVideoMode failed: %s", SDL_GetError());
-        return M64ERR_SYSTEM_FAIL;
-    }
+    // /* set the re-sizing the screen will create a new OpenGL context */
+    // l_pScreen = SDL_SetVideoMode(Width, Height, 0, videoFlags);
+    // if (l_pScreen == NULL)
+    // {
+    //     DebugMessage(M64MSG_ERROR, "SDL_SetVideoMode failed: %s", SDL_GetError());
+    //     return M64ERR_SYSTEM_FAIL;
+    // }
 
     StateChanged(M64CORE_VIDEO_SIZE, (Width << 16) | Height);
     // re-create the On-Screen Display
@@ -329,10 +381,10 @@ EXPORT m64p_error CALL VidExt_SetCaption(const char *Title)
     if (l_VideoExtensionActive)
         return (*l_ExternalVideoFuncTable.VidExtFuncSetCaption)(Title);
 
-    if (!SDL_WasInit(SDL_INIT_VIDEO))
-        return M64ERR_NOT_INIT;
+    // if (!SDL_WasInit(SDL_INIT_VIDEO))
+    //     return M64ERR_NOT_INIT;
 
-    SDL_WM_SetCaption(Title, "M64+ Video");
+    // SDL_WM_SetCaption(Title, "M64+ Video");
 
     return M64ERR_SUCCESS;
 }
@@ -351,25 +403,27 @@ EXPORT m64p_error CALL VidExt_ToggleFullScreen(void)
         return rval;
     }
 
-    if (!SDL_WasInit(SDL_INIT_VIDEO))
-        return M64ERR_NOT_INIT;
+    // if (!SDL_WasInit(SDL_INIT_VIDEO))
+    //     return M64ERR_NOT_INIT;
 
-    /* TODO:
-     * SDL_WM_ToggleFullScreen doesn't work under Windows and others
-     * (see http://wiki.libsdl.org/moin.cgi/FAQWindows for explanation).
-     * Instead, we should call SDL_SetVideoMode with the SDL_FULLSCREEN flag.
-     * (see http://sdl.beuc.net/sdl.wiki/SDL_SetVideoMode), but on Windows
-     * this resets the OpenGL context and video plugins don't support it yet.
-     * Uncomment the next line to test it: */
-    //return VidExt_SetVideoMode(l_pScreen->w, l_pScreen->h, l_pScreen->format->BitsPerPixel, l_Fullscreen ? M64VIDEO_WINDOWED : M64VIDEO_FULLSCREEN);
-    if (SDL_WM_ToggleFullScreen(l_pScreen) == 1)
-    {
-        l_Fullscreen = !l_Fullscreen;
-        StateChanged(M64CORE_VIDEO_MODE, l_Fullscreen ? M64VIDEO_FULLSCREEN : M64VIDEO_WINDOWED);
-        return M64ERR_SUCCESS;
-    }
+    // /* TODO:
+    //  * SDL_WM_ToggleFullScreen doesn't work under Windows and others
+    //  * (see http://wiki.libsdl.org/moin.cgi/FAQWindows for explanation).
+    //  * Instead, we should call SDL_SetVideoMode with the SDL_FULLSCREEN flag.
+    //  * (see http://sdl.beuc.net/sdl.wiki/SDL_SetVideoMode), but on Windows
+    //  * this resets the OpenGL context and video plugins don't support it yet.
+    //  * Uncomment the next line to test it: */
+    // //return VidExt_SetVideoMode(l_pScreen->w, l_pScreen->h, l_pScreen->format->BitsPerPixel, l_Fullscreen ? M64VIDEO_WINDOWED : M64VIDEO_FULLSCREEN);
+    // if (SDL_WM_ToggleFullScreen(l_pScreen) == 1)
+    // {
+    //     l_Fullscreen = !l_Fullscreen;
+    //     StateChanged(M64CORE_VIDEO_MODE, l_Fullscreen ? M64VIDEO_FULLSCREEN : M64VIDEO_WINDOWED);
+    //     return M64ERR_SUCCESS;
+    // }
 
-    return M64ERR_SYSTEM_FAIL;
+    // return M64ERR_SYSTEM_FAIL;
+
+    return M64ERR_SUCCESS;
 }
 
 EXPORT m64p_function CALL VidExt_GL_GetProcAddress(const char* Proc)
@@ -378,13 +432,14 @@ EXPORT m64p_function CALL VidExt_GL_GetProcAddress(const char* Proc)
     if (l_VideoExtensionActive)
         return (*l_ExternalVideoFuncTable.VidExtFuncGLGetProc)(Proc);
 
-    if (!SDL_WasInit(SDL_INIT_VIDEO))
-        return NULL;
+    // if (!SDL_WasInit(SDL_INIT_VIDEO))
+    //     return NULL;
 
 /* WARN: assume cast to m64p_function is supported by platform and disable warning accordingly */
 OSAL_WARNING_PUSH
 OSAL_NO_WARNING_FPTR_VOIDP_CAST
-    return (m64p_function)SDL_GL_GetProcAddress(Proc);
+    //return (m64p_function)SDL_GL_GetProcAddress(Proc);
+    return (m64p_function)eglGetProcAddress(Proc);
 OSAL_WARNING_POP
 }
 
@@ -422,53 +477,53 @@ EXPORT m64p_error CALL VidExt_GL_SetAttribute(m64p_GLattr Attr, int Value)
     if (l_VideoExtensionActive)
         return (*l_ExternalVideoFuncTable.VidExtFuncGLSetAttr)(Attr, Value);
 
-    if (!SDL_WasInit(SDL_INIT_VIDEO))
-        return M64ERR_NOT_INIT;
+//     if (!SDL_WasInit(SDL_INIT_VIDEO))
+//         return M64ERR_NOT_INIT;
 
-#if SDL_VERSION_ATLEAST(1,3,0)
-    if (Attr == M64P_GL_SWAP_CONTROL)
-    {
-        if (SDL_GL_SetSwapInterval(Value) != 0)
-            return M64ERR_SYSTEM_FAIL;
-        return M64ERR_SUCCESS;
-    }
-#endif
+// #if SDL_VERSION_ATLEAST(1,3,0)
+//     if (Attr == M64P_GL_SWAP_CONTROL)
+//     {
+//         if (SDL_GL_SetSwapInterval(Value) != 0)
+//             return M64ERR_SYSTEM_FAIL;
+//         return M64ERR_SUCCESS;
+//     }
+// #endif
 
-    /* translate the GL context type mask if necessary */
-#if SDL_VERSION_ATLEAST(2,0,0)
-    if (Attr == M64P_GL_CONTEXT_PROFILE_MASK)
-    {
-        switch (Value)
-        {
-            case M64P_GL_CONTEXT_PROFILE_CORE:
-                Value = SDL_GL_CONTEXT_PROFILE_CORE;
-#ifndef USE_GLES
-                l_ForceCompatibilityContext = 0;
-#endif
-                break;
-            case M64P_GL_CONTEXT_PROFILE_COMPATIBILITY:
-                Value = SDL_GL_CONTEXT_PROFILE_COMPATIBILITY;
-                break;
-            case M64P_GL_CONTEXT_PROFILE_ES:
-                Value = SDL_GL_CONTEXT_PROFILE_ES;
-                break;
-            default:
-                Value = 0;
-        }
-    }
-#endif
+//     /* translate the GL context type mask if necessary */
+// #if SDL_VERSION_ATLEAST(2,0,0)
+//     if (Attr == M64P_GL_CONTEXT_PROFILE_MASK)
+//     {
+//         switch (Value)
+//         {
+//             case M64P_GL_CONTEXT_PROFILE_CORE:
+//                 Value = SDL_GL_CONTEXT_PROFILE_CORE;
+// #ifndef USE_GLES
+//                 l_ForceCompatibilityContext = 0;
+// #endif
+//                 break;
+//             case M64P_GL_CONTEXT_PROFILE_COMPATIBILITY:
+//                 Value = SDL_GL_CONTEXT_PROFILE_COMPATIBILITY;
+//                 break;
+//             case M64P_GL_CONTEXT_PROFILE_ES:
+//                 Value = SDL_GL_CONTEXT_PROFILE_ES;
+//                 break;
+//             default:
+//                 Value = 0;
+//         }
+//     }
+// #endif
 
-    for (i = 0; i < mapSize; i++)
-    {
-        if (GLAttrMap[i].m64Attr == Attr)
-        {
-            if (SDL_GL_SetAttribute(GLAttrMap[i].sdlAttr, Value) != 0)
-                return M64ERR_SYSTEM_FAIL;
+    // for (i = 0; i < mapSize; i++)
+    // {
+    //     if (GLAttrMap[i].m64Attr == Attr)
+    //     {
+    //         if (SDL_GL_SetAttribute(GLAttrMap[i].sdlAttr, Value) != 0)
+    //             return M64ERR_SYSTEM_FAIL;
             return M64ERR_SUCCESS;
-        }
-    }
+    //     }
+    // }
 
-    return M64ERR_INPUT_INVALID;
+    // return M64ERR_INPUT_INVALID;
 }
 
 EXPORT m64p_error CALL VidExt_GL_GetAttribute(m64p_GLattr Attr, int *pValue)
@@ -490,37 +545,37 @@ EXPORT m64p_error CALL VidExt_GL_GetAttribute(m64p_GLattr Attr, int *pValue)
     }
 #endif
 
-    for (i = 0; i < mapSize; i++)
-    {
-        if (GLAttrMap[i].m64Attr == Attr)
-        {
-            int NewValue = 0;
-            if (SDL_GL_GetAttribute(GLAttrMap[i].sdlAttr, &NewValue) != 0)
-                return M64ERR_SYSTEM_FAIL;
-            /* translate the GL context type mask if necessary */
-#if SDL_VERSION_ATLEAST(2,0,0)
-            if (Attr == M64P_GL_CONTEXT_PROFILE_MASK)
-            {
-                switch (NewValue)
-                {
-                    case SDL_GL_CONTEXT_PROFILE_CORE:
-                        NewValue = M64P_GL_CONTEXT_PROFILE_CORE;
-                        break;
-                    case SDL_GL_CONTEXT_PROFILE_COMPATIBILITY:
-                        NewValue = M64P_GL_CONTEXT_PROFILE_COMPATIBILITY;
-                        break;
-                    case SDL_GL_CONTEXT_PROFILE_ES:
-                        NewValue = M64P_GL_CONTEXT_PROFILE_ES;
-                        break;
-                    default:
-                        NewValue = 0;
-                }
-            }
-#endif
-            *pValue = NewValue;
-            return M64ERR_SUCCESS;
-        }
-    }
+//     for (i = 0; i < mapSize; i++)
+//     {
+//         if (GLAttrMap[i].m64Attr == Attr)
+//         {
+//             int NewValue = 0;
+//             if (SDL_GL_GetAttribute(GLAttrMap[i].sdlAttr, &NewValue) != 0)
+//                 return M64ERR_SYSTEM_FAIL;
+//             /* translate the GL context type mask if necessary */
+// #if SDL_VERSION_ATLEAST(2,0,0)
+//             if (Attr == M64P_GL_CONTEXT_PROFILE_MASK)
+//             {
+//                 switch (NewValue)
+//                 {
+//                     case SDL_GL_CONTEXT_PROFILE_CORE:
+//                         NewValue = M64P_GL_CONTEXT_PROFILE_CORE;
+//                         break;
+//                     case SDL_GL_CONTEXT_PROFILE_COMPATIBILITY:
+//                         NewValue = M64P_GL_CONTEXT_PROFILE_COMPATIBILITY;
+//                         break;
+//                     case SDL_GL_CONTEXT_PROFILE_ES:
+//                         NewValue = M64P_GL_CONTEXT_PROFILE_ES;
+//                         break;
+//                     default:
+//                         NewValue = 0;
+//                 }
+//             }
+// #endif
+//             *pValue = NewValue;
+//             return M64ERR_SUCCESS;
+//         }
+//     }
 
     return M64ERR_INPUT_INVALID;
 }
@@ -531,10 +586,32 @@ EXPORT m64p_error CALL VidExt_GL_SwapBuffers(void)
     if (l_VideoExtensionActive)
         return (*l_ExternalVideoFuncTable.VidExtFuncGLSwapBuf)();
 
-    if (!SDL_WasInit(SDL_INIT_VIDEO))
+    // if (!SDL_WasInit(SDL_INIT_VIDEO))
+    //     return M64ERR_NOT_INIT;
+
+    // SDL_GL_SwapBuffers();
+
+    //if (!kms_window)
+    if (!display)
         return M64ERR_NOT_INIT;
 
-    SDL_GL_SwapBuffers();
+    //kms_window_swap_buffers2(kms_window);
+    go2_context_swap_buffers(context);
+
+    go2_surface_t* surface = go2_context_surface_lock(context);
+    // go2_presenter_post(presenter,
+    //             surface,
+    //             0, 0, 480, 320,
+    //             0, 0, 320, 480,
+    //             GO2_ROTATION_DEGREES_270);
+    go2_presenter_post(presenter,
+            surface,
+            0, 0, 320, 240,
+            0, 27, 320, 426,
+            GO2_ROTATION_DEGREES_270);
+
+    go2_context_surface_unlock(context, surface);
+
     return M64ERR_SUCCESS;
 }
 

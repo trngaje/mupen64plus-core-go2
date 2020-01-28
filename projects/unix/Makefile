@@ -144,9 +144,9 @@ endif
 # base CFLAGS, LDLIBS, and LDFLAGS
 OPTFLAGS ?= -O3 -flto
 WARNFLAGS ?= -Wall
-CFLAGS += -ffast-math -fno-strict-aliasing -fvisibility=hidden -I../../src -I../../src/asm_defines -DM64P_PARALLEL
+CFLAGS += -ffast-math -fno-strict-aliasing -fvisibility=hidden -I../../src -I../../src/asm_defines -I/usr/include/libdrm -DM64P_PARALLEL
 CXXFLAGS += -fvisibility-inlines-hidden
-LDLIBS +=  -lm
+LDLIBS +=  -lm -lgo2
 
 # directory paths
 SRCDIR = ../../src

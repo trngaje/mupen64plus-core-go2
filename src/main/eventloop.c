@@ -427,6 +427,12 @@ void event_initialize(void)
 {
     int i, j;
 
+    // if (SDL_Init(SDL_INIT_JOYSTICK) < 0) 
+    // {
+    //         printf("SDL joystick init failed.\n");
+    //         exit(1);
+    // }
+
     /* set initial state of all joystick commands to 'off' */
     for (i = 0; i < NumJoyCommands; i++)
         for (j = 0; j < 2; j++)

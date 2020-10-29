@@ -54,6 +54,8 @@ static SDL_Surface *l_pScreen = NULL;
 static go2_display_t* display = NULL;
 static go2_presenter_t* presenter = NULL;
 static go2_context_t* context = NULL;
+#define GO2_CONTEXT_WIDTH (640)
+#define GO2_CONTEXT_HEIGHT (480)
 
 
 /* global function for use by frontend.c */
@@ -133,7 +135,7 @@ EXPORT m64p_error CALL VidExt_Init(void)
     attr.stencil_bits = 8;
 
     //context = go2_context_create(display, 480, 320, &attr);
-    context = go2_context_create(display, 320, 240, &attr);
+    context = go2_context_create(display, GO2_CONTEXT_WIDTH, GO2_CONTEXT_HEIGHT, &attr);
     go2_context_make_current(context);
 
     return M64ERR_SUCCESS;
@@ -233,8 +235,8 @@ EXPORT m64p_error CALL VidExt_ListFullscreenModes(m64p_2d_size *SizeArray, int *
     if (!display)
         return M64ERR_NOT_INIT;
 
-    SizeArray[0].uiWidth = 480; //kms_window->width;
-    SizeArray[0].uiHeight = 320; //kms_window->height;
+    SizeArray[0].uiWidth = GO2_CONTEXT_WIDTH; //kms_window->width;
+    SizeArray[0].uiHeight = GO2_CONTEXT_HEIGHT; //kms_window->height;
 
     *NumSizes = 1;
 
@@ -604,10 +606,14 @@ EXPORT m64p_error CALL VidExt_GL_SwapBuffers(void)
     //             0, 0, 480, 320,
     //             0, 0, 320, 480,
     //             GO2_ROTATION_DEGREES_270);
+    const float aspect = 4.0f / 3.0f;
+    const int w = go2_display_width_get(display) * aspect;
+    const int x = (go2_display_height_get(display) / 2) - (w / 2);
+
     go2_presenter_post(presenter,
             surface,
-            0, 0, 320, 240,
-            0, 27, 320, 426,
+            0, 0, GO2_CONTEXT_WIDTH, GO2_CONTEXT_HEIGHT,
+            0, x, go2_display_width_get(display), w,
             GO2_ROTATION_DEGREES_270);
 
     go2_context_surface_unlock(context, surface);

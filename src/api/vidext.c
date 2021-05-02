@@ -606,15 +606,28 @@ EXPORT m64p_error CALL VidExt_GL_SwapBuffers(void)
     //             0, 0, 480, 320,
     //             0, 0, 320, 480,
     //             GO2_ROTATION_DEGREES_270);
-    const float aspect = 4.0f / 3.0f;
-    const int w = go2_display_width_get(display) * aspect;
-    const int x = (go2_display_height_get(display) / 2) - (w / 2);
 
-    go2_presenter_post(presenter,
+    const int h = go2_display_width_get(display);
+    const int w = go2_display_height_get(display);
+    const float aspect = 4.0f / 3.0f;
+
+    if (h == 640 && w == 480)
+    {
+        go2_presenter_post(presenter,
             surface,
             0, 0, GO2_CONTEXT_WIDTH, GO2_CONTEXT_HEIGHT,
-            0, x, go2_display_width_get(display), w,
+            0, 0, h, w,
+            GO2_ROTATION_DEGREES_0);
+    }
+    else
+    {
+        go2_presenter_post(presenter,
+            surface,
+            0, 0, GO2_CONTEXT_WIDTH, GO2_CONTEXT_HEIGHT,
+            0, (w / 2) - (h * aspect / 2), h, h * aspect,
             GO2_ROTATION_DEGREES_270);
+
+    }
 
     go2_context_surface_unlock(context, surface);
 
